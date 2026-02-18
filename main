@@ -1,0 +1,85 @@
+import random
+
+
+def credit_card_maker():
+    def account_management():
+        account_list = {}
+
+        def account_creation():
+            inn = "400000"
+            current_customer = "".join(str(random.randrange(10)) for _ in range(9))
+            card_number = inn + current_customer + "9"
+            pin = "".join(str(random.randrange(10)) for _ in range(4))
+
+            print(f"""Your account has been created:
+Your card number:
+{card_number}
+Your card PIN:
+{pin}""")
+
+            account_list[card_number] = pin
+
+        def account_login():
+            menu = {
+                "1": "1. Balance",
+                "2": "2. Log out",
+                "0": "0. Exit"
+            }
+
+            login_input = input("Enter your card number: ")
+            pin_input = input("Enter your PIN: ")
+
+            if login_input in account_list and account_list[login_input] == pin_input:
+                print("You have successfully logged in!")
+                while True:
+                    for option in menu.values():
+                        print(option)
+
+                    loged_choice = input()
+
+                    if loged_choice == "1":
+                        print("Balance: 0")
+                    elif loged_choice == "2":
+                        return
+                    elif loged_choice == "0":
+                        print("Bye!")
+                        return "exit"
+            else:
+                print("Wrong card number or PIN!")
+
+        def menu():
+            while True:
+                menu = {
+                    "1": "1. Create an account",
+                    "2": "2. Log into account",
+                    "3": "0. Exit"
+                }
+
+                for option in menu.values():
+                    print(option)
+
+                user_choice = input()
+
+                if user_choice == "1":
+                    account_creation()
+                elif user_choice == "2":
+                    result = account_login()
+                    if result == "exit":
+                        return
+                elif user_choice == "0":
+                    print("Bye!")
+                    return
+
+        menu()
+
+    account_management()
+
+
+credit_card_maker()
+
+
+
+
+
+
+
