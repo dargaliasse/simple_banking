@@ -2,22 +2,45 @@ import random
 
 
 def credit_card_maker():
+
     def account_management():
         account_list = {}
 
-        def account_creation():
-            inn = "400000"
-            current_customer = "".join(str(random.randrange(10)) for _ in range(9))
-            card_number = inn + current_customer + "9"
-            pin = "".join(str(random.randrange(10)) for _ in range(4))
+        def card_creation():
+            def luhn_algorithm(card_number):
+                total = 0
+                for i, n in enumerate(reversed(card_number)):
+                    d = int(n)
+                    if i % 2 == 0:
+                        d *= 2
+                        if d > 9:
+                            d -= 9
+                    total += d
+                return (10 - total % 10) % 10
 
-            print(f"""Your account has been created:
-Your card number:
-{card_number}
-Your card PIN:
-{pin}""")
+            def number_creation():
+                while True:
+                    bank_identifier = "400000"
+                    current_customer = "".join(str(random.randrange(10)) for _ in range(9))
+                    card_test_number = bank_identifier + current_customer
+                    if card_test_number not in account_list:
+                        return card_test_number
 
-            account_list[card_number] = pin
+            def pin_creation():
+                return "".join(str(random.randrange(10)) for _ in range(4))
+
+            card = number_creation()
+            checksum = luhn_algorithm(card)
+            final_card_number = card + str(checksum)
+            pin = pin_creation()
+
+            account_list[final_card_number] = pin
+
+            print("Your account has been created:")
+            print("Your card number:")
+            print(final_card_number)
+            print("Your card PIN:")
+            print(pin)
 
         def account_login():
             menu = {
@@ -52,7 +75,7 @@ Your card PIN:
                 menu = {
                     "1": "1. Create an account",
                     "2": "2. Log into account",
-                    "3": "0. Exit"
+                    "0": "0. Exit"
                 }
 
                 for option in menu.values():
@@ -61,7 +84,7 @@ Your card PIN:
                 user_choice = input()
 
                 if user_choice == "1":
-                    account_creation()
+                    card_creation()
                 elif user_choice == "2":
                     result = account_login()
                     if result == "exit":
