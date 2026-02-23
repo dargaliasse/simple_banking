@@ -1,29 +1,50 @@
 import random
+import sqlite3
+conn = sqlite3.connect('card.s3db')
+cur = conn.cursor()
+
+cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='card'")
+table_exists = cur.fetchone()
+
+if table_exists:
+    cur.execute("PRAGMA table_info(card)")
+    cols = [(row[1], row[2]) for row in cur.fetchall()]  # (name, type)
+    if ("number", "TEXT") not in cols:
+        cur.execute("DROP TABLE card")
+        conn.commit()
+
+cur.execute("""
+CREATE TABLE IF NOT EXISTS card (
+    id INTEGER,
+    number TEXT,
+    pin TEXT,
+    balance INTEGER DEFAULT 0
+)
+""")
+conn.commit()
 
 
 def credit_card_maker():
 
     def account_management():
-        account_list = {}
 
         def card_creation():
-            def luhn_algorithm(card_number):
-                total = 0
-                for i, n in enumerate(reversed(card_number)):
-                    d = int(n)
-                    if i % 2 == 0:
-                        d *= 2
-                        if d > 9:
-                            d -= 9
-                    total += d
-                return (10 - total % 10) % 10
+            def luhn_algorithm(number_15):
+                digits = [int(x) for x in number_15 + "0"]
+                for i in range(0, len(digits), 2):
+                    digits[i] *= 2
+                    if digits[i] > 9:
+                        digits[i] -= 9
+                return (10 - (sum(digits) % 10)) % 10
 
             def number_creation():
                 while True:
                     bank_identifier = "400000"
                     current_customer = "".join(str(random.randrange(10)) for _ in range(9))
                     card_test_number = bank_identifier + current_customer
-                    if card_test_number not in account_list:
+
+                    cur.execute("SELECT 1 FROM card WHERE number LIKE ?", (card_test_number + "%",))
+                    if cur.fetchone() is None:
                         return card_test_number
 
             def pin_creation():
@@ -34,13 +55,17 @@ def credit_card_maker():
             final_card_number = card + str(checksum)
             pin = pin_creation()
 
-            account_list[final_card_number] = pin
-
-            print("Your account has been created:")
-            print("Your card number:")
-            print(final_card_number)
-            print("Your card PIN:")
-            print(pin)
+            cur.execute(
+                "INSERT INTO card (number, pin, balance) VALUES (?, ?, ?)",
+                (final_card_number, pin, 0)
+            )
+            conn.commit()
+            print(f"""Your card has been created
+Your card number:
+{final_card_number}
+Your card PIN:
+{pin}"""
+)
 
         def account_login():
             menu = {
@@ -52,8 +77,16 @@ def credit_card_maker():
             login_input = input("Enter your card number: ")
             pin_input = input("Enter your PIN: ")
 
-            if login_input in account_list and account_list[login_input] == pin_input:
+            cur.execute(
+                "SELECT balance FROM card WHERE number=? AND pin=?",
+                (login_input, pin_input)
+            )
+            result = cur.fetchone()
+
+            if result:
                 print("You have successfully logged in!")
+                balance = result[0]
+
                 while True:
                     for option in menu.values():
                         print(option)
@@ -61,7 +94,7 @@ def credit_card_maker():
                     loged_choice = input()
 
                     if loged_choice == "1":
-                        print("Balance: 0")
+                        print(f"Balance: {balance}")
                     elif loged_choice == "2":
                         return
                     elif loged_choice == "0":
@@ -99,10 +132,5 @@ def credit_card_maker():
 
 
 credit_card_maker()
-
-
-
-
-
 
 
