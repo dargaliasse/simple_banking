@@ -1,21 +1,21 @@
 import random
 import sqlite3
+
 conn = sqlite3.connect('card.s3db')
 cur = conn.cursor()
 
 cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='card'")
 table_exists = cur.fetchone()
-
 if table_exists:
     cur.execute("PRAGMA table_info(card)")
-    cols = [(row[1], row[2]) for row in cur.fetchall()]  # (name, type)
+    cols = [(row[1], row[2]) for row in cur.fetchall()]
     if ("number", "TEXT") not in cols:
         cur.execute("DROP TABLE card")
         conn.commit()
 
 cur.execute("""
 CREATE TABLE IF NOT EXISTS card (
-    id INTEGER,
+    id INTEGER PRIMARY KEY,
     number TEXT,
     pin TEXT,
     balance INTEGER DEFAULT 0
@@ -24,113 +24,200 @@ CREATE TABLE IF NOT EXISTS card (
 conn.commit()
 
 
-def credit_card_maker():
+def credit_card_manager():
+    current_card = None
+    current_pin = None
 
-    def account_management():
+    def menu():
+        menu = {
+            "1": "1. Create an account",
+            "2": "2. Log into account",
+            "0": "0. Exit"
+        }
 
-        def card_creation():
-            def luhn_algorithm(number_15):
-                digits = [int(x) for x in number_15 + "0"]
-                for i in range(0, len(digits), 2):
-                    digits[i] *= 2
-                    if digits[i] > 9:
-                        digits[i] -= 9
-                return (10 - (sum(digits) % 10)) % 10
+        login_menu = {
+            "1": "1. Balance",
+            "2": "2. Add income",
+            "3": "3. Do Transfer",
+            "4": "4. Close account",
+            "5": "5. Log Out",
+            "0": "0. Exit"
+        }
+        menu_list = [menu, login_menu]
+        return menu_list
 
-            def number_creation():
-                while True:
-                    bank_identifier = "400000"
-                    current_customer = "".join(str(random.randrange(10)) for _ in range(9))
-                    card_test_number = bank_identifier + current_customer
+    def luhn_algorithm(card_number, mode="check"):
+        digits = [int(x) for x in card_number]
+        for i in range(0, len(digits), 2):
+            digits[i] *= 2
+            if digits[i] > 9:
+                digits[i] -= 9
+        checksum = (10 - (sum(digits) % 10)) % 10
+        if mode == "make":
+            return checksum
+        return sum(digits) % 10 == 0
 
-                    cur.execute("SELECT 1 FROM card WHERE number LIKE ?", (card_test_number + "%",))
-                    if cur.fetchone() is None:
-                        return card_test_number
+    def card_creation():
+        def number_creation():
+            while True:
+                bank_identifier = "400000"
+                current_customer = "".join(str(random.randrange(10)) for _ in range(9))
+                card_test_number = bank_identifier + current_customer
 
-            def pin_creation():
-                return "".join(str(random.randrange(10)) for _ in range(4))
+                cur.execute("SELECT 1 FROM card WHERE number LIKE ?", (card_test_number + "%",))
+                if cur.fetchone() is None:
+                    return card_test_number
 
-            card = number_creation()
-            checksum = luhn_algorithm(card)
-            final_card_number = card + str(checksum)
-            pin = pin_creation()
+        def pin_creation():
+            return "".join(str(random.randrange(10)) for _ in range(4))
 
-            cur.execute(
-                "INSERT INTO card (number, pin, balance) VALUES (?, ?, ?)",
-                (final_card_number, pin, 0)
-            )
-            conn.commit()
-            print(f"""Your card has been created
+        card = number_creation()
+        checksum = luhn_algorithm(card + "0", "make")
+        final_card_number = card + str(checksum)
+        pin = pin_creation()
+
+        cur.execute(
+            "INSERT INTO card (number, pin, balance) VALUES (?, ?, ?)",
+            (final_card_number, pin, 0)
+        )
+        conn.commit()
+
+        print(f"""Your card has been created
 Your card number:
 {final_card_number}
 Your card PIN:
-{pin}"""
-)
+{pin}""")
 
-        def account_login():
-            menu = {
-                "1": "1. Balance",
-                "2": "2. Log out",
-                "0": "0. Exit"
-            }
+    def account_login():
+        nonlocal current_card
+        nonlocal current_pin
 
-            login_input = input("Enter your card number: ")
-            pin_input = input("Enter your PIN: ")
+        login_input = input("Enter your card number: ")
+        pin_input = input("Enter your PIN: ")
+        cur.execute(
+            "SELECT id FROM card WHERE number=? AND pin=?",
+            (login_input, pin_input)
+        )
+        result = cur.fetchone()
+        if result:
+            print("You have successfully logged in!")
+            current_card = login_input
+            current_pin = pin_input
+            return True
+        else:
+            print("Wrong card number or PIN!")
+            return False
 
-            cur.execute(
-                "SELECT balance FROM card WHERE number=? AND pin=?",
-                (login_input, pin_input)
-            )
-            result = cur.fetchone()
+    def balance_output():
+        cur.execute(
+            "SELECT balance FROM card WHERE number=? AND pin=?",
+            (current_card, current_pin)
+        )
+        balance = cur.fetchone()
+        return balance[0] if balance else 0
 
-            if result:
-                print("You have successfully logged in!")
-                balance = result[0]
+    def add_income():
+        income = int(input("Enter income: "))
+        cur.execute("""
+            UPDATE card
+            SET balance = balance + ?
+            WHERE number=?
+        """, (income, current_card))
+        conn.commit()
+        print("Income was added!")
+        return
 
-                while True:
-                    for option in menu.values():
-                        print(option)
+    def delete_account():
+        nonlocal current_card
+        nonlocal current_pin
 
-                    loged_choice = input()
+        cur.execute("DELETE FROM card WHERE number=?", (current_card,))
+        conn.commit()
+        current_card = None
+        current_pin = None
+        print("The account has been closed!")
+        return
 
-                    if loged_choice == "1":
-                        print(f"Balance: {balance}")
-                    elif loged_choice == "2":
-                        return
-                    elif loged_choice == "0":
-                        print("Bye!")
-                        return "exit"
-            else:
-                print("Wrong card number or PIN!")
+    def transfer():
+        balance = balance_output()
+        current_account = current_card
 
-        def menu():
-            while True:
-                menu = {
-                    "1": "1. Create an account",
-                    "2": "2. Log into account",
-                    "0": "0. Exit"
-                }
+        transfer_target = input("Enter the card number: ").strip()
 
-                for option in menu.values():
-                    print(option)
+        if transfer_target == current_account:
+            print("You can't transfer money to the same account!")
+            return
 
-                user_choice = input()
+        if not transfer_target.isdigit() or len(transfer_target) != 16:
+            print("Probably you made a mistake in the card number. Please try again!")
+            return
 
-                if user_choice == "1":
-                    card_creation()
-                elif user_choice == "2":
-                    result = account_login()
-                    if result == "exit":
-                        return
-                elif user_choice == "0":
-                    print("Bye!")
-                    return
+        if not luhn_algorithm(transfer_target, "check"):
+            print("Probably you made a mistake in the card number. Please try again!")
+            return
 
-        menu()
+        cur.execute("SELECT 1 FROM card WHERE number=?", (transfer_target,))
+        if cur.fetchone() is None:
+            print("Such a card does not exist.")
+            return
 
-    account_management()
+        amount = int(input("Enter how much money you want to transfer: "))
+        if amount > balance:
+            print("Not enough money!")
+            return
+
+        cur.execute("UPDATE card SET balance = balance - ? WHERE number=?", (amount, current_account))
+        cur.execute("UPDATE card SET balance = balance + ? WHERE number=?", (amount, transfer_target))
+        conn.commit()
+        print("Success!")
+        return
+
+    def login_menu_navigation():
+        login_menu = menu()[1]
+        while True:
+            for option in login_menu.values():
+                print(option)
+
+            log_choice = input()
+            if log_choice == "1":
+                balance = balance_output()
+                print(f"Balance: {balance}")
+            elif log_choice == "2":
+                add_income()
+            elif log_choice == "3":
+                transfer()
+            elif log_choice == "4":
+                delete_account()
+                return
+            elif log_choice == "5":
+                nonlocal current_card
+                nonlocal current_pin
+                current_card = None
+                current_pin = None
+                print("You have successfully logged out!")
+                return
+            elif log_choice == "0":
+                print("Bye!")
+                return "exit"
+
+    while True:
+        menus = menu()
+        for option in menus[0].values():
+            print(option)
+
+        user_choice = input()
+        if user_choice == "1":
+            card_creation()
+        elif user_choice == "2":
+            account_login()
+            result = login_menu_navigation()
+            if result == "exit":
+                return
+        elif user_choice == "0":
+            print("Bye!")
+            return
 
 
-credit_card_maker()
+credit_card_manager()
 
 
